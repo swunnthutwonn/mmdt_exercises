@@ -1,24 +1,31 @@
 import requests
-import pandas as pd 
+import pandas as pd
+import os
+from dotenv import load_dotenv
+from pathlib import Path
+
+dotenv_path = Path("week9/.env")
+load_dotenv(dotenv_path=dotenv_path)
 
 
 # urls
 covid_data_url = 'https://raw.githubusercontent.com/owid/covid-19-data/refs/heads/master/public/data/latest/owid-covid-latest.json'
-cities_url = 'https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/refs/heads/master/json/countries%2Bcities.json'
+cities_url = "https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/refs/heads/master/json/countries%2Bstates%2Bcities.json"
 
 
 
 # covid dataframe
 covid_response = requests.get(covid_data_url)
-if covid_response.status_code == 200:
+try:
+    covid_response.raise_for_status()
     data = covid_response.json()
     covid_data_df = pd.DataFrame()
     for country_code in data.keys():
         df = pd.json_normalize(data[country_code], sep="_")
         df['country_code'] = country_code
         covid_data_df = pd.concat([covid_data_df, df], ignore_index=True)
-else:
-    print(f"Error! {covid_response.status_code}")
+except requests.exceptions.RequestException as e:
+    print(f"Error! {e}")
 
 covid_data_df = covid_data_df[['continent','country_code', 'location', 'last_updated_date','total_cases','new_cases',  'total_deaths', 'new_deaths']]
 
@@ -35,7 +42,7 @@ else:
 
 
 # cities' weather_data_df
-API_KEY = 'ffe5d054b617b526d2b3fe87efe80904'
+API_KEY = os.getenv("OPENWEATHER_API_KEY")
 weather_data_list = []
 for city in cities_df['capital']:
     # print(city)
