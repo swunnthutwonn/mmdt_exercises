@@ -107,8 +107,8 @@ def get_city_weather_data_by_lat_lon(latitude: str, longitude: str) -> dict:
 
         return {
             "city": weather_json.get('name', "Unknown"),
-            "latitude": latitude,
-            "longitude": longitude,
+            "city_latitude": latitude,
+            "city_longitude": longitude,
             "condition": weather_json.get('weather', [{}])[0].get('description', "Unknown"),
             "temperature_min": weather_json.get('main', {}).get('temp_min', np.nan),
             "temperature_max": weather_json.get('main', {}).get('temp_max', np.nan)
@@ -142,24 +142,36 @@ def transform_data() -> pd.DataFrame:
         return pd.DataFrame()
 
     # Merge city and COVID-19 data
-    merged_df = cities_df.merge(covid_df, on='country_code', how="inner")
+    cities_covid_df = cities_df.merge(covid_df, on='country_code', how="left")
+
+    print("Columns after merge:", cities_covid_df.columns)  # Debugging line
+
+    # Ensure city_latitude exists
+    if 'city_latitude' not in cities_covid_df.columns:
+        logging.error("Missing 'city_latitude' column after merge!")
+        return pd.DataFrame()
+
     selected_cols = ['country_region', 'country_subregion', 'country_name', 'country_code',
                      'country_capital', 'state_name', 'city_name', 'city_latitude', 'city_longitude',
                      'total_cases', 'new_cases', 'total_deaths', 'new_deaths']
-    merged_df = merged_df[selected_cols]
+    
+    cities_covid_df = cities_covid_df[selected_cols].dropna(subset=['city_latitude', 'city_longitude'])
+
+    # Get 10 cities per country
+    cities_covid_df = cities_covid_df.groupby('country_name').head(10)
 
     # Fetch weather data
-    lat_lon_list = merged_df[['city_latitude', 'city_longitude']].to_dict(orient='records')
+    lat_lon_list = cities_covid_df[['city_latitude', 'city_longitude']].to_dict(orient='records')
     weather_df = get_all_cities_weather_data(lat_lon_list)
 
-    # Merge weather data
-    final_df = merged_df.merge(weather_df, left_on=['city_latitude', 'city_longitude'],
-                               right_on=['latitude', 'longitude'], how="inner")
+    # Merge cities COVID data with weather data
+    final_df = cities_covid_df.merge(weather_df, on=['city_latitude', 'city_longitude'], how="inner")
 
     selected_final_cols = ['country_region', 'country_subregion', 'country_name', 'country_code',
                            'country_capital', 'state_name', 'city_name', 'city_latitude', 'city_longitude',
                            'total_cases', 'new_cases', 'total_deaths', 'new_deaths', 'condition',
                            'temperature_min', 'temperature_max']
+    
     return final_df[selected_final_cols]
 
 
